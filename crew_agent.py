@@ -1,17 +1,19 @@
+
 import os
+import litellm
 from crewai import Agent, Task, Crew, LLM
 from tools import extract_pdf_text, generate_quiz, search_study_resources
 
-# --- Apply the patch to fix the Groq 'cache_breakpoint' error ---
-from litellm_patch import apply_patch
-apply_patch()
-# ----------------------------------------------------------------
+# --- Force LiteLLM to drop unsupported params (fixes Groq cache_breakpoint error) ---
+litellm.drop_params = True
 
 # --- Groq + GPT-OSS-120B ---
 groq_llm = LLM(
     model="groq/openai/gpt-oss-120b",
     api_key=os.getenv("GROQ_API_KEY"),
     temperature=0.2,
+    drop_params=True,
+    additional_drop_params=["cache_breakpoint"],
 )
 
 # --- Single Agent ---
