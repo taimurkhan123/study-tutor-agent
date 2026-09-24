@@ -2,6 +2,10 @@ import os
 from crewai import Agent, Task, Crew, LLM
 from tools import extract_pdf_text, generate_quiz, search_study_resources
 
+# --- Apply the patch to fix the Groq 'cache_breakpoint' error ---
+from litellm_patch import apply_patch
+apply_patch()
+# ----------------------------------------------------------------
 
 # --- Groq + GPT-OSS-120B ---
 groq_llm = LLM(
@@ -9,7 +13,6 @@ groq_llm = LLM(
     api_key=os.getenv("GROQ_API_KEY"),
     temperature=0.2,
 )
-
 
 # --- Single Agent ---
 tutor_agent = Agent(
@@ -28,7 +31,6 @@ tutor_agent = Agent(
     verbose=True,
     allow_delegation=False,
 )
-
 
 def run_tutor_agent(user_request: str) -> str:
     task = Task(
