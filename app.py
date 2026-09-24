@@ -1,6 +1,7 @@
 
 import streamlit as st
 import os
+import time
 from io import BytesIO
 from datetime import datetime
 from pypdf import PdfReader
@@ -21,9 +22,11 @@ st.set_page_config(
 # ============================================================
 st.markdown("""
 <style>
+    html { scroll-behavior: smooth; }
+
     .main .block-container {
         padding-top: 1.5rem;
-        padding-bottom: 6rem;
+        padding-bottom: 8rem;
         max-width: 860px;
     }
     h1 {
@@ -37,7 +40,6 @@ st.markdown("""
         font-size: 0.95rem;
         margin-bottom: 1.5rem;
     }
-    /* Chat bubbles */
     .stChatMessage {
         padding: 1rem 1.2rem;
         border-radius: 1rem;
@@ -57,7 +59,6 @@ st.markdown("""
         border: 1px solid #D1D5DB !important;
         box-shadow: 0 2px 8px rgba(0,0,0,0.04) !important;
     }
-    /* Sidebar */
     section[data-testid="stSidebar"] {
         background-color: #F8FAFC;
         border-right: 1px solid #E5E7EB;
@@ -67,7 +68,6 @@ st.markdown("""
         color: #111827;
         margin-bottom: 0.3rem;
     }
-    /* Buttons */
     .stButton button {
         border-radius: 0.6rem;
         font-weight: 500;
@@ -78,7 +78,6 @@ st.markdown("""
         border-color: #93C5FD;
         background-color: #EFF6FF;
     }
-    /* PDF pill */
     .pdf-pill {
         display: inline-block;
         padding: 0.35rem 0.75rem;
@@ -89,7 +88,6 @@ st.markdown("""
         font-weight: 500;
         margin-bottom: 0.5rem;
     }
-    /* Message count badge */
     .msg-count {
         font-size: 0.78rem;
         color: #6B7280;
@@ -130,6 +128,17 @@ if "pdf_name" not in st.session_state:
     st.session_state.pdf_name = None
 if "chat_id" not in st.session_state:
     st.session_state.chat_id = datetime.now().strftime("%Y%m%d_%H%M%S")
+if "show_preview" not in st.session_state:
+    st.session_state.show_preview = False
+
+# ============================================================
+#  HELPER: typewriter streaming
+# ============================================================
+def stream_text(text: str):
+    """Yield the text word by word for a typewriter effect."""
+    for word in text.split(" "):
+        yield word + " "
+        time.sleep(0.02)
 
 # ============================================================
 #  SIDEBAR
@@ -203,16 +212,15 @@ with st.sidebar:
         col_a, col_b = st.columns(2)
         with col_a:
             if st.button("🔍 Preview", use_container_width=True):
-                st.session_state.show_preview = not st.session_state.get(
-                    "show_preview", False
-                )
+                st.session_state.show_preview = not st.session_state.show_preview
         with col_b:
             if st.button("❌ Remove", use_container_width=True):
                 st.session_state.pdf_text = None
                 st.session_state.pdf_name = None
+                st.session_state.show_preview = False
                 st.rerun()
 
-        if st.session_state.get("show_preview", False):
+        if st.session_state.show_preview:
             with st.expander("PDF preview", expanded=True):
                 st.text(st.session_state.pdf_text[:1500] + "...")
 
@@ -240,7 +248,7 @@ with status_cols[1]:
 
 st.write("")
 
-# --- Render chat ---
+# --- Render chat history ---
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"])
@@ -253,11 +261,15 @@ placeholder = (
 )
 
 if prompt := st.chat_input(placeholder):
+    # 1. Show user message
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
+    # 2. Assistant response with typewriter effect
     with st.chat_message("assistant"):
+        placeholder_box = st.empty()
+
         with st.spinner("Thinking..."):
             try:
                 history = st.session_state.messages[:-1]
@@ -268,10 +280,27 @@ if prompt := st.chat_input(placeholder):
                 )
             except Exception as e:
                 response = f"⚠️ Error: {e}"
-            st.markdown(response)
 
+        # Stream the answer word by word
+        placeholder_box.write_stream(stream_text(response))
+
+    # 3. Save to history
     st.session_state.messages.append({"role": "assistant", "content": response})
-    st.rerun()
+
+    # 4. Smooth auto-scroll to bottom
+    st.markdown(
+        """
+        <script>
+            const chatEnd = window.parent.document.querySelector(
+                '[data-testid="stChatInput"]'
+            );
+            if (chatEnd) {
+                chatEnd.scrollIntoView({behavior: "smooth", block: "end"});
+            }
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
 
 # ============================================================
 #  FOOTER
